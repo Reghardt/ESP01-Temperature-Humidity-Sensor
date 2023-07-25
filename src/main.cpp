@@ -4,7 +4,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include "Adafruit_AM2320.h"
-#include <RTClib.h>
+// #include <RTClib.h>
 
 
 #define SCREEN_I2C_ADDRESS 0x3c
@@ -13,26 +13,26 @@
 #define OLED_RESET -1   //   QT-PY / XIAO
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_AM2320 am2320 = Adafruit_AM2320();
-RTC_DS3231 rtc;
+// RTC_DS3231 rtc;
 
-void startRTC();
+// void startRTC();
 
 void setup()   {
   Wire.begin(2,0);
   Serial.begin(9600);
 
-  if (! rtc.begin()) 
-  {
-    Serial.println("Couldn't find RTC");
-    Serial.flush();
-    while (1) delay(10);
-  }
+  // if (! rtc.begin()) 
+  // {
+  //   Serial.println("Couldn't find RTC");
+  //   Serial.flush();
+  //   while (1) delay(10);
+  // }
 
-  if (rtc.lostPower()) 
-  {
-    Serial.println("RTC lost power, let's set the time!");
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  }
+  // if (rtc.lostPower()) 
+  // {
+  //   Serial.println("RTC lost power, let's set the time!");
+  //   rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  // }
 
   am2320.begin();
 
@@ -47,7 +47,7 @@ void loop() {
 
   float temp = am2320.readTemperature();
   float humid = am2320.readHumidity();
-  DateTime now = rtc.now();
+  // DateTime now = rtc.now();
 
   display.clearDisplay();
   display.setCursor(0, 0);
