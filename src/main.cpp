@@ -134,6 +134,7 @@
 #include <ESP8266WebServer.h>
 
 #define CONNECTION_TIME_MS 5000
+#define SEND_INTERVAL_MS 10000
 
 // String prepareHtmlPage();
 void handle_NotFound();
@@ -143,6 +144,8 @@ void handle_Connect();
 /* Put your SSID & Password */
 const char* ssid = "NodeMCU";  // Enter SSID here
 const char* password = "12345678";  //Enter Password here
+
+unsigned long previousMillis=0;
 
 IPAddress local_ip(192,168,1,1);
 IPAddress gateway(192,168,1,1);
@@ -158,7 +161,6 @@ void setup() {
   WiFi.softAPConfig(local_ip, gateway, subnet);
   delay(100);
 
-
   server.on("/", handle_Home);
   server.on("/connect", handle_Connect);
   server.onNotFound(handle_NotFound);
@@ -170,35 +172,19 @@ void setup() {
 void loop() {
   server.handleClient();
 
-  if (WiFiMulti.run(CONNECTION_TIME_MS) == WL_CONNECTED) {
-    Serial.print("WiFi connected: ");
-    Serial.print(WiFi.SSID());
-    Serial.print(" ");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println("WiFi not connected!");
+  unsigned long currentMillis = millis();
+  if((unsigned long)(currentMillis - previousMillis) >= SEND_INTERVAL_MS) {
+    if (WiFiMulti.run(CONNECTION_TIME_MS) == WL_CONNECTED) {
+      Serial.print("WiFi connected: ");
+      Serial.print(WiFi.SSID());
+      Serial.print(" ");
+      Serial.println(WiFi.localIP());
+    } else {
+      Serial.println("WiFi not connected!");
+    }
+    previousMillis = currentMillis;
   }
-
-  delay(3000);
 }
-
-// String prepareHtmlPage()
-// {
-//   String htmlPage;
-//   htmlPage.reserve(1024);               // prevent ram fragmentation
-//   htmlPage = F("HTTP/1.1 200 OK\r\n"
-//                "Content-Type: text/html\r\n"
-//                "Connection: close\r\n"  // the connection will be closed after completion of the response
-//                "Refresh: 5\r\n"         // refresh the page automatically every 5 sec
-//                "\r\n"
-//                "<!DOCTYPE HTML>"
-//                "<html>"
-//                "Analog input:  ");
-//   htmlPage += analogRead(A0);
-//   htmlPage += F("</html>"
-//                 "\r\n");
-//   return htmlPage;
-// }
 
 void handle_Connect(){
   
@@ -229,3 +215,22 @@ void handle_Home(){
 void handle_NotFound(){
   server.send(404, "text/plain", "Not found");
 }
+
+
+// String prepareHtmlPage()
+// {
+//   String htmlPage;
+//   htmlPage.reserve(1024);               // prevent ram fragmentation
+//   htmlPage = F("HTTP/1.1 200 OK\r\n"
+//                "Content-Type: text/html\r\n"
+//                "Connection: close\r\n"  // the connection will be closed after completion of the response
+//                "Refresh: 5\r\n"         // refresh the page automatically every 5 sec
+//                "\r\n"
+//                "<!DOCTYPE HTML>"
+//                "<html>"
+//                "Analog input:  ");
+//   htmlPage += analogRead(A0);
+//   htmlPage += F("</html>"
+//                 "\r\n");
+//   return htmlPage;
+// }
