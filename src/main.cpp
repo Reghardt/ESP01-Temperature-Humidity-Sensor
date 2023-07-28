@@ -132,6 +132,7 @@
 #include <ESP8266WiFiMulti.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WebServer.h>
+#include "WiFiClientSecure.h"
 
 #define CONNECTION_TIME_MS 5000
 #define SEND_INTERVAL_MS 10000
@@ -146,6 +147,7 @@ const char* ssid = "NodeMCU";  // Enter SSID here
 const char* password = "12345678";  //Enter Password here
 
 unsigned long previousMillis=0;
+String url = "https://cloudy-seal-62.deno.dev/api/reading?tmp=10&hmd=50";
 
 IPAddress local_ip(192,168,1,1);
 IPAddress gateway(192,168,1,1);
@@ -169,22 +171,43 @@ void setup() {
   Serial.println("HTTP server started");
 }
 
-void loop() {
+void loop() 
+{
   server.handleClient();
 
   unsigned long currentMillis = millis();
-  if((unsigned long)(currentMillis - previousMillis) >= SEND_INTERVAL_MS) {
-    if (WiFiMulti.run(CONNECTION_TIME_MS) == WL_CONNECTED) {
+  if((unsigned long)(currentMillis - previousMillis) >= SEND_INTERVAL_MS) 
+  {
+    if (WiFiMulti.run(CONNECTION_TIME_MS) == WL_CONNECTED) 
+    {
       Serial.print("WiFi connected: ");
       Serial.print(WiFi.SSID());
       Serial.print(" ");
       Serial.println(WiFi.localIP());
-    } else {
+
+        WiFiClientSecure client;
+        client.setInsecure();
+        
+        HTTPClient https;
+        Serial.println("Requesting " + url);
+        if (https.begin(client, url)) {
+          int httpCode = https.GET();
+          Serial.println("============== Response code: " + String(httpCode));
+          if (httpCode > 0) {
+            Serial.println(https.getString());
+          }
+          https.end();
+        } else {
+          Serial.printf("[HTTPS] Unable to connect\n");
+        }
+    }
+    else {
       Serial.println("WiFi not connected!");
     }
     previousMillis = currentMillis;
   }
 }
+
 
 void handle_Connect(){
   
