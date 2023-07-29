@@ -133,11 +133,20 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WebServer.h>
 #include "WiFiClientSecure.h"
+// #include <SPI.h>
+// #include <Wire.h>
+// #include <Adafruit_GFX.h>
+// #include <Adafruit_SH110X.h>
+// #include "Adafruit_AM2320.h"
+
+#include "./pages/pages.h"
+
 
 #define CONNECTION_TIME_MS 5000
 #define SEND_INTERVAL_MS 10000
 
 // String prepareHtmlPage();
+String createURL(String temp, String humidity);
 void handle_NotFound();
 void handle_Home();
 void handle_Connect();
@@ -147,7 +156,7 @@ const char* ssid = "NodeMCU";  // Enter SSID here
 const char* password = "12345678";  //Enter Password here
 
 unsigned long previousMillis=0;
-String url = "https://cloudy-seal-62.deno.dev/api/reading?tmp=10&hmd=50";
+
 
 IPAddress local_ip(192,168,1,1);
 IPAddress gateway(192,168,1,1);
@@ -189,6 +198,7 @@ void loop()
         client.setInsecure();
         
         HTTPClient https;
+        String url = createURL("10", "30");
         Serial.println("Requesting " + url);
         if (https.begin(client, url)) {
           int httpCode = https.GET();
@@ -208,8 +218,14 @@ void loop()
   }
 }
 
+String createURL(String temp, String humidity){
+  return "https://cloudy-seal-62.deno.dev/api/reading?tmp=" + temp + "&hmd=" + humidity;
+}
+
 
 void handle_Connect(){
+
+  server.hasArg();
   
   WiFiMulti.cleanAPlist();
   WiFiMulti.addAP("GN10", "123456789x");
@@ -232,7 +248,7 @@ void handle_Connect(){
 }
 
 void handle_Home(){
-  server.send(200, "text/plain", "Home");
+  server.send(200, "text/html", connect_html);
 }
 
 void handle_NotFound(){
