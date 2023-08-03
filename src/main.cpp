@@ -9,11 +9,12 @@
 #include "Adafruit_AM2320.h"
 #include "./pages/pages.h"
 #include "wireless/wireless.h"
-
+#include "env.h"
 
 #define CONNECTION_TIME_MS 5000
-#define SEND_INTERVAL_MS 10000
-#define SCREEN_I2C_ADDRESS 0x3c
+#define SEND_INTERVAL_MS 1800000 //every 30 mins - roughly as the system does not have a real time clock for accurate readings
+#define READ_INTERVAL_MS 10000 // every 10 seconds
+#define SCREEN_I2C_ADDRESS 0x3c // Address of 0x3C by default
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define OLED_RESET -1   //   QT-PY / XIAO
@@ -27,20 +28,22 @@ Wireless wireless;
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_AM2320 am2320 = Adafruit_AM2320();
 
-String createURL(String temp, String humidity);
+String createJSON(String api_key, float temperature, float humidity);
 void handle_NotFound();
 void handle_Setup();
-void handle_Connect();
-void sendReading(float temperature, float humidity);
+void handle_Credentials();
+String sendReading(float temperature, float humidity);
 void updateScreen(float temperature, float humidity, String nrOfReadings, bool wifiConnected);
 
 const char* ssid = "NodeMCU"; 
 const char* password = "12345678";
-unsigned long previousMillis=0;
-float temp = 0.0f;
-float humid = 0.0f;
-String nrOfReadings = "0";
-int refreshes = 0;
+
+float temperature = 0.0f;
+float humidity = 0.0f;
+String nrOfReadingsSentToday = "0";
+
+unsigned long previousSendMillis = 0;
+unsigned long previousReadMillis = 0;
 
 void setup() {
   Wire.begin(2,0);
@@ -49,46 +52,44 @@ void setup() {
   wireless.begin(&eeprom, ssid, password, local_ip, gateway, subnet);
   am2320.begin();
   delay(250); // wait for the OLED to power up
-  display.begin(SCREEN_I2C_ADDRESS, true); // Address of 0x3C by default
-  display.display(); //Adafruit splash screen
-  delay(2000); //wait for splash creen
+  display.begin(SCREEN_I2C_ADDRESS, true); 
   display.setTextColor(SH110X_WHITE); //needed for displaying text later on
 
   //setup server endpoints
   server.on("/", handle_Setup);
-  server.on("/connect", HTTP_POST, handle_Connect);
+  server.on("/credentials", HTTP_POST, handle_Credentials);
   server.onNotFound(handle_NotFound);
-
   server.begin();
+
   Serial.println("HTTP server started");
 
-  wireless.loadCredentials();
-  updateScreen(am2320.readTemperature(), am2320.readHumidity(), nrOfReadings, wireless.connection(true));
+  temperature = am2320.readTemperature();
+  humidity = am2320.readHumidity();
+  updateScreen(am2320.readTemperature(), am2320.readHumidity(), nrOfReadingsSentToday, wireless.connection(true)); //display readings without trying to connect to wifi so there is now "screen on" delay. Will display "No Wifi" at first
+  
+  wireless.loadCredentials(); //load wifi credentials from EEPROM
+  updateScreen(am2320.readTemperature(), am2320.readHumidity(), nrOfReadingsSentToday, wireless.connection()); // update screen again but this time it can take its time trying to connect to the wifi as a recent temp + humid reading is displayed on the screen. The screen wont be black
 }
 
 void loop() 
 {
   server.handleClient();
-
   unsigned long currentMillis = millis();
-  if((unsigned long)(currentMillis - previousMillis) >= SEND_INTERVAL_MS) 
+
+  if((unsigned long)(currentMillis - previousReadMillis) >= READ_INTERVAL_MS) //read temp + humid every x seconds
   {
-    temp = am2320.readTemperature();
-    humid = am2320.readHumidity();
+    temperature = am2320.readTemperature();
+    humidity = am2320.readHumidity();
+    Serial.println("temp: " + String(temperature) + " humid: " + String(humidity));
 
-    Serial.println("temp: " + String(temp) + " humid: " + String(humid));
-
-    if(refreshes > 6)
+    if((unsigned long)(currentMillis - previousSendMillis) >= SEND_INTERVAL_MS) // send temp + humid reading every y seconds
     {
-      sendReading(temp, humid);
-      refreshes = 0;
+      nrOfReadingsSentToday = sendReading(temperature, humidity);
+      previousSendMillis = currentMillis;
     }
 
-    wireless.connection();
-    updateScreen(temp, humid, nrOfReadings, wireless.connection(true));
-
-    refreshes++;
-    previousMillis = currentMillis;
+    updateScreen(temperature, humidity, nrOfReadingsSentToday, wireless.connection()); //check if connection exists on every reading. This will cause the connection state to update on the screen. ie WiFi OK -> No Wifi and vice versa
+    previousReadMillis = currentMillis;
   }
 }
 
@@ -120,13 +121,16 @@ void updateScreen(float temperature, float humidity, String nrOfReadings, bool w
   {
     display.print("No WiFi");
   }
-
   display.display();
 }
 
+String createJSON(String api_key, float temperature, float humidity){
+  return "{\"api_key\":\"" + api_key + "\",\"temp\":\"" + String(temperature) + "\",\"humidity\":\"" + String(humidity) + "\"}";
+}
 
-void sendReading(float temperature, float humidity)
+String sendReading(float temperature, float humidity)
 {
+  String response = "0";
   if (wireless.connection()) 
   {
     WiFiClientSecure client;
@@ -134,15 +138,15 @@ void sendReading(float temperature, float humidity)
 
     client.setInsecure();
     
-    String url = createURL(String(temperature), String(humidity));
     Serial.println("Requesting " + url);
     if (https.begin(client, url)) 
     {
-      int httpCode = https.GET();
+      
+      https.addHeader("Content-Type", "application/json");
+      int httpCode = https.POST(createJSON(api_key, temperature, humidity));
       Serial.println("Response code: " + String(httpCode));
       if (httpCode > 0) {
-        nrOfReadings = https.getString();
-        Serial.println(nrOfReadings);
+        response = https.getString();
       }
       https.end();
     } 
@@ -151,14 +155,10 @@ void sendReading(float temperature, float humidity)
       Serial.printf("[HTTPS] Unable to connect\n");
     }
   }
+  return response;
 }
 
-String createURL(String temp, String humidity){
-  return "https://cloudy-seal-62.deno.dev/api/reading?tmp=" + temp + "&hmd=" + humidity;
-}
-
-
-void handle_Connect(){
+void handle_Credentials(){
   if(server.hasArg("hotspot_name") == false || server.arg("hotspot_name") == NULL)
   {
     Serial.println("No hotspot name");
@@ -175,16 +175,20 @@ void handle_Connect(){
   }
   else
   {
+    Serial.println("credentials received OK");
     wireless.saveCredentials(server.arg("hotspot_name"), server.arg("hotspot_pass") == NULL ? "" : server.arg("hotspot_pass"));
+    wireless.loadCredentials();
 
     if(wireless.connection()) {
       delay(500);
       server.send(200, "text/html", connectionSuccess_html);
+      updateScreen(temperature, humidity, nrOfReadingsSentToday, wireless.connection(true));
       delay(500);
     } else {
       wireless.clearCredentials();
       delay(500);
       server.send(200, "text/html", connectionError_html);
+      updateScreen(temperature, humidity, nrOfReadingsSentToday, wireless.connection(true));
       delay(500);
     }
   } 

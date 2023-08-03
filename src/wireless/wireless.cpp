@@ -12,6 +12,7 @@ void Wireless::begin(EEPROMClass* eeprom, const char *ssid, const char *password
     delay(100);
 }
 
+// Checks if a connection exists. If not it tries to establish one. quick = true returns the last connection state and does not try to establish a connection if one does not exist.
 bool Wireless::connection(bool quick)
 {
     static bool isConnected = false;
