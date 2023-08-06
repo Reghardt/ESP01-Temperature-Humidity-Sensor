@@ -42,7 +42,7 @@ float temperature = 0.0f;
 float humidity = 0.0f;
 String nrOfReadingsSentToday = "0";
 
-unsigned long previousSendMillis = 0;
+unsigned long previousSendMillis = -SEND_INTERVAL_MS; // try to send reading when entering loop
 unsigned long previousReadMillis = 0;
 
 void setup() {
@@ -93,7 +93,7 @@ void loop()
   }
 }
 
-void updateScreen(float temperature, float humidity, String nrOfReadings, bool wifiConnected)
+void updateScreen(float temperature, float humidity, String nrOfReadingsSentToday, bool wifiConnected)
 {
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -109,7 +109,7 @@ void updateScreen(float temperature, float humidity, String nrOfReadings, bool w
 
   display.setCursor(98, 46);
   display.setTextSize(1);
-  display.print("R:" + nrOfReadings);
+  display.print("R:" + nrOfReadingsSentToday);
 
   display.setCursor(80, 54);
   display.setTextSize(1);
